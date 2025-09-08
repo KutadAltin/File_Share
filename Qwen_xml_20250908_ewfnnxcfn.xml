@@ -1,0 +1,89 @@
+<!--
+    Targeted Sysmon Config for Red Team Exercise
+    Focus: Initial Access, PrivEsc, Cred Dump, Exfil
+    Lightweight — ignores browser, Office, etc.
+-->
+
+<Sysmon schemaversion="4.90">
+  <HashAlgorithms>md5,sha256</HashAlgorithms>
+  <EventFiltering>
+
+    <!-- 1. Process Creation (Event ID 1) -->
+    <ProcessCreate onmatch="include">
+      <!-- Suspicious binaries we might use -->
+      <Image condition="contains">update.exe</Image>
+      <Image condition="contains">PrintSpoofer.exe</Image>
+      <Image condition="contains">mimikatz</Image>
+      <Image condition="contains">SafetyKatz</Image>
+      <Image condition="contains">nanodump</Image>
+      <Image condition="end with">.vbs</Image>
+      <Image condition="end with">.js</Image>
+      <Image condition="end with">.ps1</Image>
+      <!-- Processes often abused -->
+      <Image condition="contains">\cmd.exe</Image>
+      <Image condition="contains">\powershell.exe</Image>
+      <Image condition="contains">\certutil.exe</Image>
+      <Image condition="contains">\bitsadmin.exe</Image>
+      <Image condition="contains">\reg.exe</Image>
+    </ProcessCreate>
+
+    <!-- Log ALL process creations with command line (for guest payload) -->
+    <ProcessCreate onmatch="exclude">
+      <!-- You can exclude noisy system processes if needed, but for simplicity, log all -->
+    </ProcessCreate>
+
+    <!-- 3. Network Connection (Event ID 3) -->
+    <NetworkConnect onmatch="include">
+      <!-- Reverse shell & exfil connections -->
+      <DestinationPort>4444</DestinationPort> <!-- Your reverse shell -->
+      <DestinationPort>80</DestinationPort>
+      <DestinationPort>443</DestinationPort>
+      <DestinationPort>53</DestinationPort> <!-- DNS exfil -->
+      <Image condition="contains">cmd.exe</Image>
+      <Image condition="contains">powershell.exe</Image>
+      <Image condition="contains">certutil.exe</Image>
+    </NetworkConnect>
+
+    <!-- 11. File Create (Event ID 11) -->
+    <FileCreate onmatch="include">
+      <TargetFilename condition="contains">secret</TargetFilename>
+      <TargetFilename condition="contains">.b64</TargetFilename>
+      <TargetFilename condition="contains">.save</TargetFilename> <!-- SAM/SYSTEM hives -->
+      <Image condition="contains">cmd.exe</Image>
+      <Image condition="contains">powershell.exe</Image>
+    </FileCreate>
+
+    <!-- 10. ProcessAccess (Event ID 10) — for LSASS dumping -->
+    <ProcessAccess onmatch="include">
+      <TargetImage condition="contains">lsass.exe</TargetImage>
+      <SourceImage condition="contains">PrintSpoofer</SourceImage>
+      <SourceImage condition="contains">mimikatz</SourceImage>
+      <SourceImage condition="contains">explorer.exe</SourceImage> <!-- if injected -->
+    </ProcessAccess>
+
+    <!-- 8. CreateRemoteThread (Event ID 8) — injection -->
+    <CreateRemoteThread onmatch="include">
+      <TargetImage condition="contains">explorer.exe</TargetImage>
+      <TargetImage condition="contains">svchost.exe</TargetImage>
+      <SourceImage condition="contains">update.exe</SourceImage>
+    </CreateRemoteThread>
+
+    <!-- 12-14. Registry (Event ID 12,13,14) — persistence -->
+    <!-- Optional: enable if you plan to add registry persistence -->
+    <!--
+    <RegistryEvent onmatch="include" type="CreateKey">
+      <TargetObject condition="contains">Run</TargetObject>
+    </RegistryEvent>
+    -->
+
+    <!-- 17-18. Named Pipes (Event ID 17,18) — for lateral movement tools -->
+    <!-- Optional: include if using named pipes -->
+    <!--
+    <PipeEvent onmatch="include">
+      <PipeName condition="contains">\postex_</PipeName>
+      <PipeName condition="contains">\msagent_</PipeName>
+    </PipeEvent>
+    -->
+
+  </EventFiltering>
+</Sysmon>
