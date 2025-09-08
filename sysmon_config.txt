@@ -1,0 +1,107 @@
+<Sysmon schemaversion="4.90">
+  <HashAlgorithms>md5,sha256</HashAlgorithms>
+  <CheckRevocation/>
+  
+  <EventFiltering>
+    <!-- Event ID 1: Process Creation - Critical for tracking attack execution -->
+    <RuleGroup name="ProcessCreate" groupRelation="or">
+      <ProcessCreate onmatch="include">
+        <!-- Metasploit/Meterpreter related processes -->
+        <Image condition="contains any">meterpreter;powershell;cmd;rundll32;regsvr32;wscript;cscript;mshta;certutil;bitsadmin</Image>
+        <CommandLine condition="contains any">powershell -e;powershell -enc;-windowstyle hidden;-noprofile;-executionpolicy bypass;iex;invoke-expression;downloadstring;certutil -decode;bitsadmin /transfer</CommandLine>
+        <!-- Privilege escalation tools -->
+        <Image condition="contains any">net.exe;net1.exe;whoami;tasklist;systeminfo;wmic</Image>
+        <!-- Common persistence mechanisms -->
+        <Image condition="contains any">schtasks;reg.exe;sc.exe</Image>
+        <!-- File operations for exfiltration -->
+        <Image condition="contains any">xcopy;robocopy;copy;move;7z;winrar;zip</Image>
+      </ProcessCreate>
+    </RuleGroup>
+
+    <!-- Event ID 3: Network Connections - Track reverse shell and C2 -->
+    <RuleGroup name="NetworkConnect" groupRelation="or">
+      <NetworkConnect onmatch="include">
+        <!-- Outbound connections from suspicious processes -->
+        <Image condition="contains any">powershell;cmd;rundll32;regsvr32;wscript;cscript;mshta</Image>
+        <!-- Common reverse shell ports -->
+        <DestinationPort condition="is">4444</DestinationPort>
+        <DestinationPort condition="is">8080</DestinationPort>
+        <DestinationPort condition="is">443</DestinationPort>
+        <DestinationPort condition="is">80</DestinationPort>
+        <!-- Exclude common legitimate traffic to reduce noise -->
+        <Image condition="not">C:\Program Files\Windows Defender\MsMpEng.exe</Image>
+      </NetworkConnect>
+    </RuleGroup>
+
+    <!-- Event ID 5: Process Termination - Track cleanup activities -->
+    <RuleGroup name="ProcessTerminate" groupRelation="or">
+      <ProcessTerminate onmatch="include">
+        <Image condition="contains any">powershell;cmd;net.exe;taskkill</Image>
+      </ProcessTerminate>
+    </RuleGroup>
+
+    <!-- Event ID 7: Image/DLL Load - Track malicious DLL injection -->
+    <RuleGroup name="ImageLoad" groupRelation="or">
+      <ImageLoad onmatch="include">
+        <!-- Focus on PowerShell and suspicious process DLL loads -->
+        <Image condition="contains any">powershell;rundll32;regsvr32</Image>
+        <ImageLoaded condition="contains any">System32\amsi.dll;System32\wldp.dll</ImageLoaded>
+      </ImageLoad>
+    </RuleGroup>
+
+    <!-- Event ID 8: Create Remote Thread - Process injection detection -->
+    <RuleGroup name="CreateRemoteThread" groupRelation="or">
+      <CreateRemoteThread onmatch="exclude">
+        <!-- Exclude common legitimate processes to reduce noise -->
+        <SourceImage condition="is">C:\Windows\System32\wbem\WmiPrvSE.exe</SourceImage>
+        <SourceImage condition="is">C:\Windows\System32\svchost.exe</SourceImage>
+      </CreateRemoteThread>
+    </RuleGroup>
+
+    <!-- Event ID 11: File Create - Track payload drops and exfiltration -->
+    <RuleGroup name="FileCreate" groupRelation="or">
+      <FileCreate onmatch="include">
+        <!-- Executable files created -->
+        <TargetFilename condition="endswith">.exe</TargetFilename>
+        <TargetFilename condition="endswith">.bat</TargetFilename>
+        <TargetFilename condition="endswith">.ps1</TargetFilename>
+        <TargetFilename condition="endswith">.vbs</TargetFilename>
+        <TargetFilename condition="endswith">.dll</TargetFilename>
+        <!-- Common temp/download directories -->
+        <TargetFilename condition="contains any">\Temp\;\Downloads\;\AppData\Local\Temp\;\Users\Public\</TargetFilename>
+        <!-- Desktop files for exfiltration simulation -->
+        <TargetFilename condition="contains">\Desktop\</TargetFilename>
+      </FileCreate>
+    </RuleGroup>
+
+    <!-- Event ID 12/13: Registry Events - Track persistence and credential access -->
+    <RuleGroup name="Registry" groupRelation="or">
+      <RegistryEvent onmatch="include">
+        <!-- Common persistence locations -->
+        <TargetObject condition="contains any">CurrentVersion\Run;CurrentVersion\RunOnce;Winlogon\Shell;Winlogon\Userinit</TargetObject>
+        <!-- Credential access related -->
+        <TargetObject condition="contains any">SAM\Domains;SECURITY\Policy\Secrets;SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon</TargetObject>
+        <!-- PowerShell execution policy bypass -->
+        <TargetObject condition="contains">SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell\ExecutionPolicy</TargetObject>
+      </RegistryEvent>
+    </RuleGroup>
+
+    <!-- Event ID 15: File Stream Create - Track ADS usage -->
+    <RuleGroup name="FileCreateStreamHash" groupRelation="or">
+      <FileCreateStreamHash onmatch="include">
+        <TargetFilename condition="contains">:</TargetFilename>
+      </FileCreateStreamHash>
+    </RuleGroup>
+
+    <!-- Event ID 22: DNS Queries - Track C2 communications -->
+    <RuleGroup name="DnsQuery" groupRelation="or">
+      <DnsQuery onmatch="include">
+        <!-- DNS queries from suspicious processes -->
+        <Image condition="contains any">powershell;cmd;rundll32;regsvr32</Image>
+        <!-- Exclude common legitimate queries to reduce noise -->
+        <QueryName condition="not endswith">.microsoft.com</QueryName>
+        <QueryName condition="not endswith">.windows.com</QueryName>
+      </DnsQuery>
+    </RuleGroup>
+  </EventFiltering>
+</Sysmon>
