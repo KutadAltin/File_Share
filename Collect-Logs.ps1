@@ -1,5 +1,3 @@
-# Collect-Logs.ps1 — Run AFTER attack simulation (as Administrator)
-
 param(
     [string]$OutputBasePath = "C:\AttackLogs"
 )
@@ -29,10 +27,10 @@ $logs = @(
 foreach ($log in $logs) {
     $outputFile = Join-Path $OutputFolder "$($log.Name).evtx"
     try {
-        wevtutil epl $log.Path $outputFile
-        Write-Host "  → Exported $($log.Name) log" -ForegroundColor Cyan
+        wevtutil epl "$($log.Path)" "$outputFile"
+        Write-Host "  -> Exported $($log.Name) log" -ForegroundColor Cyan
     } catch {
-        Write-Host "  → Failed to export $($log.Name): $_" -ForegroundColor Red
+        Write-Host "  -> Failed to export $($log.Name): $_" -ForegroundColor Red
     }
 }
 
@@ -41,12 +39,12 @@ $transcriptSource = "C:\PSLogs\"
 if (Test-Path $transcriptSource) {
     $transcriptDest = Join-Path $OutputFolder "PS_Transcripts"
     Copy-Item "$transcriptSource\*" -Destination $transcriptDest -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "  → Copied PowerShell transcripts" -ForegroundColor Cyan
+    Write-Host "  -> Copied PowerShell transcripts" -ForegroundColor Cyan
 }
 
-# Optional: Create ZIP archive
+# Create ZIP archive
 $zipPath = "$OutputFolder.zip"
 Compress-Archive -Path "$OutputFolder\*" -DestinationPath $zipPath -Force
-Write-Host "`n[✓] Logs exported and archived to: $zipPath" -ForegroundColor Green
+Write-Host "`n[+] Logs exported and archived to: $zipPath" -ForegroundColor Green
 
-Write-Host "`n[💡] Tip: Use Chainsaw, EVTX Explorer, or Event Viewer to analyze .evtx files." -ForegroundColor Yellow
+Write-Host "`n[i] Tip: Use Chainsaw, EVTX Explorer, or Event Viewer to analyze .evtx files." -ForegroundColor Yellow
